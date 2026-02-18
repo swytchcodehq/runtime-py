@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swytchcode-runtime"
+version = "0.1.0"
+description = "Thin runtime wrapper around the Swytchcode CLI"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["swytchcode", "cli", "runtime", "exec"]
+authors = [{ name = "Swytchcode" }]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.urls]
+repository = "https://gitlab.com/swytchcode/py-runtime"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["swytchcode_runtime*"]
