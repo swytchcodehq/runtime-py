@@ -32,7 +32,9 @@ def _resolve_bin() -> str:
     if sys.platform == "win32":
         local_app_data = os.environ.get("LOCALAPPDATA", "")
         candidates = [
-            os.path.join(local_app_data, "Programs", "swytchcode", "bin", "swytchcode.exe"),
+            os.path.join(
+                local_app_data, "Programs", "swytchcode", "bin", "swytchcode.exe"
+            ),
         ]
     else:
         home = os.path.expanduser("~")
