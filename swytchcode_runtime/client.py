@@ -15,12 +15,13 @@ class _Tools:
         p = self._c.provider
         return p.format_tools(neutral) if p else neutral
 
-    def execute(self, canonical_id: str, args: dict) -> Any:
+    def execute(self, canonical_id: str, args: dict, **options) -> Any:
         # If args are flat (no body/params top-level keys), wrap them in body
         # as expected by the Swytchcode CLI kernel (like in run-workflow.js)
         if "body" not in args and "params" not in args:
             args = {"body": args}
-        return _exec(canonical_id, args)
+        # Forward exec options (dry_run, raw, allow_raw, cwd, env) to the CLI.
+        return _exec(canonical_id, args, **options)
 
     def _tool(self, cid: str) -> Tool:
         m = _discover.info(cid)

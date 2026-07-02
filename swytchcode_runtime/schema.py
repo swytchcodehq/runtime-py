@@ -5,20 +5,14 @@ from typing import Any
 def simplify(inputs: Any) -> dict:
     # Handle Wrekenfile shape: a list of single-key dicts (e.g. [{"amount": {"TYPE": "INT"...}}])
     if isinstance(inputs, list):
-        props = {}
+        all_props = {}
+        required_props = {}
         required = []
         for item in inputs:
             if not isinstance(item, dict):
                 continue
             for name, spec in item.items():
                 if not isinstance(spec, dict):
-                    continue
-                
-                # Only required fields are exposed to the LLM (criterion #2:
-                # do not surface optional fields). Skip anything not REQUIRED.
-                req = spec.get("REQUIRED", False)
-                is_required = req is True or (isinstance(req, str) and req.strip().lower() == "true")
-                if not is_required:
                     continue
 
                 # Default to string if TYPE is missing
@@ -30,9 +24,20 @@ def simplify(inputs: Any) -> dict:
                 elif t.startswith("[]"): t = "array"
                 else: t = "string"
 
-                props[name] = {"type": t, "description": spec.get("DESC", "")}
-                required.append(name)
+                prop = {"type": t, "description": spec.get("DESC", "")}
+                all_props[name] = prop
 
+                req = spec.get("REQUIRED", False)
+                is_required = req is True or (isinstance(req, str) and req.strip().lower() == "true")
+                if is_required:
+                    required_props[name] = prop
+                    required.append(name)
+
+        # Prefer required-only fields (criterion #2: don't surface optional noise).
+        # But some tools (e.g. Stripe) mark EVERY field optional — a required-only
+        # schema would then be empty, and the model calls the tool with no args.
+        # So fall back to exposing all fields when nothing is marked required.
+        props = required_props if required else all_props
         return {"type": "object", "properties": props, "required": required}
 
     # Fallback to standard JSON Schema handling
