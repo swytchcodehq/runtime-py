@@ -126,3 +126,57 @@ def create_account(input: dict) -> any:
 ```
 
 **Avoid:** subprocess boilerplate, HTTP calls, or config parsing. Use `exec(...)` and let the CLI handle execution and policy.
+
+## Agentic workflows (framework integrations)
+
+On top of `exec`, the runtime exposes a small agentic surface that turns Swytchcode tools
+into the native tool objects each agent framework expects. The Swytchcode part is the same
+two lines regardless of framework:
+
+```python
+from swytchcode_runtime import Swytchcode
+from swytchcode_runtime.providers.anthropic import AnthropicProvider
+
+swx = Swytchcode(provider=AnthropicProvider())
+tools = swx.tools.get(toolkits=["stripe"])   # framework-native tools, required-fields-only
+```
+
+### Selecting tools — `swx.tools.get(...)`
+
+Pass exactly one selector; IDs resolve against your local Swytchcode state and remote search:
+
+- `toolkits=["stripe"]` — every enabled tool whose integration matches a toolkit.
+- `tools=["charges.charge.create"]` — explicit canonical IDs.
+- `search="refund a charge"` — natural-language discovery (via `swytchcode discover`).
+
+Each returned tool carries a **required-fields-only** input schema — optional fields are not
+surfaced to the model — and an `execute` callback that runs `swytchcode exec` for you.
+
+### Supported providers
+
+| Framework | Import | Who runs the tool loop |
+|-----------|--------|------------------------|
+| Anthropic Claude | `providers.anthropic.AnthropicProvider` | you (Messages API + `swx.handle_tool_calls`) |
+| OpenAI Agents SDK | `providers.openai_agents.OpenAIAgentsProvider` | the SDK |
+| Vercel AI SDK | `providers.vercel.VercelProvider` | the SDK |
+| LangGraph | `providers.langgraph.LangGraphProvider` | the prebuilt agent |
+| CrewAI | `providers.crewai.CrewAIProvider` | the crew |
+
+### Non-agentic APIs (Anthropic Messages)
+
+When you run the tool loop yourself, `handle_tool_calls` executes each `tool_use` block and
+returns the `tool_result` blocks to send back:
+
+```python
+import anthropic
+client = anthropic.Anthropic()
+msg = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=1024, tools=tools,
+    messages=[{"role": "user", "content": "Refund charge ch_123 for $20"}],
+)
+results = swx.handle_tool_calls(msg)   # runs the tool calls, returns tool_result blocks
+```
+
+One runnable file per framework lives in `sdk-examples/`. Install the matching framework SDK
+(`pip install openai-agents` / `anthropic` / `ai` / `langgraph` / `crewai`) alongside the
+`swytchcode` CLI.
