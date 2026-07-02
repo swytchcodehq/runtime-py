@@ -1,6 +1,5 @@
 """Vercel AI SDK provider (Python equivalent)."""
 from __future__ import annotations
-import asyncio
 from .base import Provider, Tool
 
 class VercelProvider(Provider):
@@ -10,15 +9,14 @@ class VercelProvider(Provider):
         except ImportError:
             raise ImportError("Please install the Vercel AI SDK (requires Python 3.12+): pip install ai-sdk-python")
 
-        # Verified against ai_sdk.tool.Tool.run: the SDK invokes the handler as
-        # `handler(**kwargs)` (arguments by field name, never a positional dict)
-        # and awaits the result if it is awaitable. So an async handler taking
-        # **kwargs matches exactly; using **kwargs (not a positional param) also
-        # avoids colliding with a tool field literally named "args". We offload
-        # the blocking CLI call to a thread so the awaited handler never stalls
-        # the event loop.
-        async def _execute(**kwargs):
-            return await asyncio.to_thread(tool.execute, kwargs)
+        # The handler MUST be synchronous. ai_sdk's sync generate_text() calls the
+        # tool handler without awaiting it, so an async handler is silently never
+        # awaited — the tool never runs and the model hallucinates success. A sync
+        # handler returns a plain value that works in generate_text AND is fine for
+        # the async Tool.run path (which only awaits awaitables). Called as
+        # handler(**kwargs) — arguments by field name, never a positional dict.
+        def _execute(**kwargs):
+            return tool.execute(kwargs)
 
         return vercel_tool(
             name=tool.name,
