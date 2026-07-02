@@ -6,6 +6,25 @@ from . import discover as _discover, schema as _schema, manage as _manage
 from .exec import exec_ as _exec
 from .providers.base import Provider, Tool
 
+
+def _strip_empty(obj: Any) -> Any:
+    """Recursively drop keys whose value is None or an empty string ("").
+
+    With 'expose all fields', agents often fill unused optional fields with "",
+    which APIs like Stripe reject ("empty values are an attempt to unset").
+    Only None and "" are dropped — 0, False, [], {} are preserved as meaningful.
+    """
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            if v is None or (isinstance(v, str) and v == ""):
+                continue
+            out[k] = _strip_empty(v)
+        return out
+    if isinstance(obj, list):
+        return [_strip_empty(v) for v in obj]
+    return obj
+
 class _Tools:
     def __init__(self, client: "Swytchcode"):
         self._c = client
@@ -24,6 +43,13 @@ class _Tools:
         # as expected by the Swytchcode CLI kernel (like in run-workflow.js)
         if "body" not in args and "params" not in args:
             args = {"body": args}
+        # Drop empty optional fields (None/"") from body & params so values an
+        # agent over-filled don't reach the API (e.g. Stripe rejects customer="").
+        args = dict(args)
+        if isinstance(args.get("body"), (dict, list)):
+            args["body"] = _strip_empty(args["body"])
+        if isinstance(args.get("params"), (dict, list)):
+            args["params"] = _strip_empty(args["params"])
         # Forward exec options (dry_run, raw, allow_raw, cwd, env) to the CLI.
         return _exec(canonical_id, args, **options)
 
