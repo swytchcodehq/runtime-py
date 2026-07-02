@@ -5,8 +5,7 @@ from typing import Any
 def simplify(inputs: Any) -> dict:
     # Handle Wrekenfile shape: a list of single-key dicts (e.g. [{"amount": {"TYPE": "INT"...}}])
     if isinstance(inputs, list):
-        all_props = {}
-        required_props = {}
+        props = {}
         required = []
         for item in inputs:
             if not isinstance(item, dict):
@@ -24,20 +23,18 @@ def simplify(inputs: Any) -> dict:
                 elif t.startswith("[]"): t = "array"
                 else: t = "string"
 
-                prop = {"type": t, "description": spec.get("DESC", "")}
-                all_props[name] = prop
+                props[name] = {"type": t, "description": spec.get("DESC", "")}
 
                 req = spec.get("REQUIRED", False)
                 is_required = req is True or (isinstance(req, str) and req.strip().lower() == "true")
                 if is_required:
-                    required_props[name] = prop
                     required.append(name)
 
-        # Prefer required-only fields (criterion #2: don't surface optional noise).
-        # But some tools (e.g. Stripe) mark EVERY field optional — a required-only
-        # schema would then be empty, and the model calls the tool with no args.
-        # So fall back to exposing all fields when nothing is marked required.
-        props = required_props if required else all_props
+        # Composio-style rule: expose ALL fields to the model and list only the
+        # truly-required ones in `required`. A required-only approach hid optional
+        # fields — which left all-optional tools (e.g. Stripe) with an empty schema
+        # so the model called them with no arguments, and blinded the model to
+        # optional fields on tools that do have some required ones.
         return {"type": "object", "properties": props, "required": required}
 
     # Fallback to standard JSON Schema handling
