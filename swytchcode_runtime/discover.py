@@ -1,7 +1,10 @@
 """Find tools by intent and read their schemas."""
 
 from __future__ import annotations
+import logging
 from .cli import run_cli
+
+logger = logging.getLogger(__name__)
 
 
 def search(intent: str, *, top: int = 5) -> list[dict]:
@@ -17,7 +20,10 @@ def info(canonical_id: str) -> dict:
             return result[0] if result else {}
         return result
     except Exception as e:
-        print(
-            f"Warning: Failed to fetch info for {canonical_id} ({e}). Using empty schema."
+        # Broad by design: any CLI/parse failure degrades to an empty schema
+        # rather than breaking tool discovery. Logged (not printed) so it
+        # respects the host app's logging config.
+        logger.warning(
+            "Failed to fetch info for %s (%s). Using empty schema.", canonical_id, e
         )
         return {"canonical_id": canonical_id, "inputs": {}}

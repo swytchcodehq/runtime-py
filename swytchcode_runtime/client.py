@@ -85,9 +85,15 @@ class _Tools:
             found = []
             for m in res.get("methods", []):
                 integration = m.get("integration", "")
+                cid = m.get("canonical_id")
+                if not cid:
+                    continue
                 for tk in toolkits:
-                    if tk in integration:
-                        found.append(m.get("canonical_id"))
+                    # integration is "project.library@version"; match the project
+                    # segment exactly, not a loose substring (so "hub" != "github").
+                    if tk == integration or integration.startswith(f"{tk}."):
+                        found.append(cid)
+                        break
             return found
         return []
 
@@ -108,12 +114,20 @@ class Swytchcode:
                 cid = self.tools._name_to_cid.get(block.name) or block.name.replace(
                     "_", "."
                 )
-                result = self.tools.execute(cid, getattr(block, "input", {}))
+                # Isolate failures per block so one failing tool doesn't drop the
+                # results for the other tool_use blocks in the same turn.
+                try:
+                    content = str(self.tools.execute(cid, getattr(block, "input", {})))
+                    is_error = False
+                except Exception as e:
+                    content = f"Error executing {cid}: {e}"
+                    is_error = True
                 results.append(
                     {
                         "type": "tool_result",
                         "tool_use_id": block.id,
-                        "content": str(result),
+                        "content": content,
+                        "is_error": is_error,
                     }
                 )
         return results

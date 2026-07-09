@@ -1,7 +1,7 @@
-"""Reduce a tool's input schema to its strictly-required fields for the LLM."""
+"""Simplify a tool's input schema for the LLM: expose all fields, mark required ones."""
 
 from __future__ import annotations
-from typing import Any
+from typing import Any, Optional
 
 
 def simplify(inputs: Any) -> dict:
@@ -20,6 +20,8 @@ def simplify(inputs: Any) -> dict:
                 t = spec.get("TYPE", "STRING").lower()
                 if t == "int":
                     t = "integer"
+                elif t in ("float", "number", "double"):
+                    t = "number"
                 elif t == "bool":
                     t = "boolean"
                 elif t == "object":
@@ -52,11 +54,13 @@ def simplify(inputs: Any) -> dict:
         return {"type": "object", "properties": {}, "required": []}
 
     props = inputs.get("properties") or {}
-    required = inputs.get("required") or list(props.keys())
+    required = inputs.get("required") or []
     keep = {}
 
-    for name in required:
-        spec = props.get(name, {})
+    # Expose all fields (same rule as the wrekenfile branch above); use the
+    # original required list only for the `required` key so optional/nested
+    # fields stay optional instead of being dropped or forced required.
+    for name, spec in props.items():
         if (
             isinstance(spec, dict)
             and spec.get("type") == "object"
@@ -65,7 +69,11 @@ def simplify(inputs: Any) -> dict:
             spec = simplify(spec)  # recurse into nested objects
         keep[name] = spec
 
-    return {"type": "object", "properties": keep, "required": list(keep.keys())}
+    return {
+        "type": "object",
+        "properties": keep,
+        "required": [r for r in required if r in keep],
+    }
 
 
 def to_pydantic_model(schema: dict, name: str = "ArgsSchema") -> Any:
@@ -88,12 +96,16 @@ def to_pydantic_model(schema: dict, name: str = "ArgsSchema") -> Any:
             field_type = float
         elif t == "boolean":
             field_type = bool
+        elif t == "array":
+            field_type = list
         elif t == "object":
             field_type = to_pydantic_model(field_info, f"{name}_{field_name}")
 
         if field_name in required:
             fields[field_name] = (field_type, ...)
         else:
-            fields[field_name] = (field_type, None)
+            # Optional[...] so an explicit null is accepted (pydantic v2 rejects
+            # None for a bare non-optional annotation).
+            fields[field_name] = (Optional[field_type], None)
 
     return create_model(name, **fields)

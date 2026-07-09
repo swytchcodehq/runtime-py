@@ -10,7 +10,13 @@ from .exec import _resolve_bin
 from .errors import SwytchcodeError
 
 
-def run_cli(args: list[str], *, cwd: str | None = None, env: dict | None = None) -> Any:
+def run_cli(
+    args: list[str],
+    *,
+    cwd: str | None = None,
+    env: dict | None = None,
+    timeout: float | None = 60,
+) -> Any:
     cmd = [_resolve_bin(), *args]
     if "--json" not in args:
         cmd.append("--json")
@@ -21,11 +27,19 @@ def run_cli(args: list[str], *, cwd: str | None = None, env: dict | None = None)
 
     try:
         r = subprocess.run(
-            cmd, capture_output=True, cwd=cwd or os.getcwd(), env=run_env
+            cmd,
+            capture_output=True,
+            cwd=cwd or os.getcwd(),
+            env=run_env,
+            timeout=timeout,
         )
     except FileNotFoundError as e:
         raise SwytchcodeError(
             "Failed to spawn swytchcode; is the CLI installed?", e
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        raise SwytchcodeError(
+            f"swytchcode command timed out after {timeout}s", e
         ) from e
 
     if r.returncode != 0:
