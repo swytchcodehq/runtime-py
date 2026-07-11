@@ -13,7 +13,7 @@ def _strip_empty(obj: Any) -> Any:
 
     With 'expose all fields', agents often fill unused optional fields with "",
     which APIs like Stripe reject ("empty values are an attempt to unset").
-    Only None and "" are dropped — 0, False, [], {} are preserved as meaningful.
+    Only None and "" are dropped - 0, False, [], {} are preserved as meaningful.
     """
     if isinstance(obj, dict):
         out = {}

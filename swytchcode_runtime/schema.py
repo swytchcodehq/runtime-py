@@ -44,7 +44,7 @@ def simplify(inputs: Any) -> dict:
 
         # Composio-style rule: expose ALL fields to the model and list only the
         # truly-required ones in `required`. A required-only approach hid optional
-        # fields — which left all-optional tools (e.g. Stripe) with an empty schema
+        # fields - which left all-optional tools (e.g. Stripe) with an empty schema
         # so the model called them with no arguments, and blinded the model to
         # optional fields on tools that do have some required ones.
         return {"type": "object", "properties": props, "required": required}
