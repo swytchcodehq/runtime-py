@@ -50,34 +50,6 @@ def _strip_empty(obj: Any) -> Any:
     return obj
 
 
-def _split_by_location(inputs: Any, flat_args: dict) -> dict:
-    """Route flat args into body/params based on LOCATION metadata from wrekenfile."""
-    body = {}
-    params = {}
-    # inputs is the raw wrekenfile list-of-single-key-dicts with LOCATION
-    locations = {}
-    if isinstance(inputs, list):
-        for item in inputs:
-            if isinstance(item, dict):
-                for name, spec in item.items():
-                    if isinstance(spec, dict):
-                        loc = (
-                            spec.get("LOCATION") or spec.get("location") or "body"
-                        ).lower()
-                        locations[name] = loc
-    for key, val in flat_args.items():
-        loc = locations.get(key, "body")
-        if loc in ("path", "query"):
-            params[key] = val
-        else:
-            body[key] = val
-    result = {}
-    if body:
-        result["body"] = body
-    if params:
-        result["params"] = params
-    return result if result else {"body": flat_args}
-
 
 class _Tools:
     def __init__(self, client: "Swytchcode"):
@@ -93,21 +65,8 @@ class _Tools:
         return p.format_tools(neutral) if p else neutral
 
     def execute(self, canonical_id: str, args: dict, **options) -> Any:
-        # If args are flat (no body/params top-level keys), wrap them in body
-        # as expected by the Swytchcode CLI kernel (like in run-workflow.js)
-        if "body" not in args and "params" not in args:
-            _raw_inputs = options.pop("_raw_inputs", None)
-            if _raw_inputs is not None:
-                args = _split_by_location(_raw_inputs, args)
-            else:
-                args = {"body": args}
-        # Drop empty optional fields (None/"") from body & params so values an
-        # agent over-filled don't reach the API (e.g. Stripe rejects customer="").
         args = dict(args)
-        if isinstance(args.get("body"), (dict, list)):
-            args["body"] = _strip_empty(args["body"])
-        if isinstance(args.get("params"), (dict, list)):
-            args["params"] = _strip_empty(args["params"])
+        args = _strip_empty(args)
         # Forward exec options (dry_run, raw, allow_raw, cwd, env) to the CLI.
         return _exec(canonical_id, args, **options)
 

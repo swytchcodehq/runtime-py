@@ -36,7 +36,8 @@ def simplify(inputs: Any) -> dict:
                 props[name] = {"type": t, "description": spec.get("DESC", "")}
 
                 req = spec.get("REQUIRED", False)
-                is_required = req is True or (
+                loc = str(spec.get("LOCATION", spec.get("location", ""))).lower()
+                is_required = loc == "path" or req is True or (
                     isinstance(req, str) and req.strip().lower() == "true"
                 )
                 if is_required:
