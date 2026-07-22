@@ -3,9 +3,28 @@
 from __future__ import annotations
 from typing import Any, Optional
 
+import re
+import hashlib
+
 from . import discover as _discover, schema as _schema, manage as _manage
 from .exec import exec_ as _exec
 from .providers.base import Provider, Tool
+
+
+MAX_TOOL_NAME_LEN = 64  # OpenAI and Anthropic strict limit
+
+
+def _make_alias(cid: str, taken: dict[str, str]) -> str:
+    base = re.sub(r"[^a-zA-Z0-9_-]", "_", cid)
+    existing = taken.get(base)
+    needs_hash = len(base) > MAX_TOOL_NAME_LEN or (existing and existing != cid)
+
+    if not needs_hash:
+        return base
+
+    h = hashlib.sha1(cid.encode("utf-8")).hexdigest()[:6]
+    keep = MAX_TOOL_NAME_LEN - 1 - len(h)
+    return base[:keep] + "_" + h
 
 
 def _toolkit_matches(toolkit: str, integration: str) -> bool:
@@ -97,7 +116,11 @@ class _Tools:
         self._cid_to_inputs: dict[str, Any] = {}
 
     def get(self, *, toolkits=None, tools=None, search=None):
-        neutral = [self._tool(cid) for cid in self._ids(toolkits, tools, search)]
+        # Sort canonical IDs lexicographically before alias assignment.
+        # This ensures deterministic assignment order across runs, guaranteeing the
+        # same canonical ID always receives the exact same alias (and same hash if colliding).
+        ids = sorted(self._ids(toolkits, tools, search))
+        neutral = [self._tool(cid) for cid in ids]
         p = self._c.provider
         return p.format_tools(neutral) if p else neutral
 
@@ -131,16 +154,7 @@ class _Tools:
                 f"Tool discovery failed for {cid}: Invalid or missing Wrekenfile schema"
             )
 
-        import re
-
-        name = re.sub(r"[^a-zA-Z0-9_-]", "_", cid)
-
-        # Handle name collision (e.g. github.user vs github_user)
-        suffix = 0
-        base_name = name
-        while name in self._name_to_cid and self._name_to_cid[name] != cid:
-            suffix += 1
-            name = f"{base_name}_{suffix}"
+        name = _make_alias(cid, self._name_to_cid)
 
         self._name_to_cid[name] = cid
         raw_inputs = m.get("inputs")
