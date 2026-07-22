@@ -51,6 +51,35 @@ def _strip_empty(obj: Any) -> Any:
 
 
 
+def _split_by_location(inputs: Any, flat_args: dict) -> dict:
+    """Route flat args into body/params based on LOCATION metadata from wrekenfile."""
+    body_args = {}
+    params_args = {}
+    locations = {}
+
+    if isinstance(inputs, list):
+        for item in inputs:
+            if isinstance(item, dict):
+                for name, spec in item.items():
+                    if isinstance(spec, dict):
+                        loc = str(spec.get("LOCATION", spec.get("location", "body"))).lower()
+                        locations[name] = loc
+
+    for k, v in flat_args.items():
+        loc = locations.get(k, "body")
+        if loc in ("path", "query"):
+            params_args[k] = v
+        else:
+            body_args[k] = v
+
+    result = {}
+    if body_args:
+        result["body"] = body_args
+    if params_args:
+        result["params"] = params_args
+    return result
+
+
 class _Tools:
     def __init__(self, client: "Swytchcode"):
         self._c = client
@@ -65,10 +94,24 @@ class _Tools:
         return p.format_tools(neutral) if p else neutral
 
     def execute(self, canonical_id: str, args: dict, **options) -> Any:
-        args = dict(args)
-        args = _strip_empty(args)
+        final_args = dict(args)
+        
+        if "body" not in final_args and "params" not in final_args:
+            raw_inputs = options.pop("_raw_inputs", None)
+            if raw_inputs:
+                final_args = _split_by_location(raw_inputs, final_args)
+            else:
+                final_args = {"body": final_args}
+        else:
+            options.pop("_raw_inputs", None)
+
+        if isinstance(final_args.get("body"), dict):
+            final_args["body"] = _strip_empty(final_args["body"])
+        if isinstance(final_args.get("params"), dict):
+            final_args["params"] = _strip_empty(final_args["params"])
+            
         # Forward exec options (dry_run, raw, allow_raw, cwd, env) to the CLI.
-        return _exec(canonical_id, args, **options)
+        return _exec(canonical_id, final_args, **options)
 
     def _tool(self, cid: str) -> Tool:
         m = _discover.info(cid)
