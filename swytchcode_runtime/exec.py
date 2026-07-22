@@ -119,7 +119,9 @@ def exec_(  # noqa: A001 - shadowing intentional for API consistency with JS/Go
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as e:
-        raise SwytchcodeError(f"swytchcode exec timed out after {timeout} seconds", e) from e
+        raise SwytchcodeError(
+            f"swytchcode exec timed out after {timeout} seconds", e
+        ) from e
     except FileNotFoundError as e:
         hint = (
             f"using binary at {bin_path!r}"

@@ -56,13 +56,15 @@ def _split_by_location(inputs: Any, flat_args: dict) -> dict:
     params = {}
     # inputs is the raw wrekenfile list-of-single-key-dicts with LOCATION, or a JSON schema dict
     locations = {}
-    
+
     if isinstance(inputs, list):
         for item in inputs:
             if isinstance(item, dict):
                 for name, spec in item.items():
                     if isinstance(spec, dict):
-                        loc = str(spec.get("LOCATION", spec.get("location", "body"))).lower()
+                        loc = str(
+                            spec.get("LOCATION", spec.get("location", "body"))
+                        ).lower()
                         locations[name] = loc
     elif isinstance(inputs, dict) and isinstance(inputs.get("properties"), dict):
         for name, spec in inputs["properties"].items():
@@ -101,7 +103,7 @@ class _Tools:
 
     def execute(self, canonical_id: str, args: dict, **options) -> Any:
         final_args = dict(args)
-        
+
         # If args are flat (no body/params top-level keys), wrap them in body
         # as expected by the Swytchcode CLI kernel (like in run-workflow.js)
         if "body" not in final_args and "params" not in final_args:
@@ -125,11 +127,14 @@ class _Tools:
     def _tool(self, cid: str) -> Tool:
         m = _discover.info(cid)
         if not m or not m.get("inputs"):
-            raise ValueError(f"Tool discovery failed for {cid}: Invalid or missing Wrekenfile schema")
+            raise ValueError(
+                f"Tool discovery failed for {cid}: Invalid or missing Wrekenfile schema"
+            )
 
         import re
-        name = re.sub(r'[^a-zA-Z0-9_-]', '_', cid)
-        
+
+        name = re.sub(r"[^a-zA-Z0-9_-]", "_", cid)
+
         # Handle name collision (e.g. github.user vs github_user)
         suffix = 0
         base_name = name
@@ -184,7 +189,9 @@ class Swytchcode:
         self.provider = provider
         self.tools = _Tools(self)
 
-    def handle_tool_calls(self, response: Any, timeout: float | None = None) -> list[dict]:
+    def handle_tool_calls(
+        self, response: Any, timeout: float | None = None
+    ) -> list[dict]:
         """Helper to execute tools for non-agentic APIs like Anthropic."""
         results = []
         for block in getattr(response, "content", []):
@@ -199,7 +206,14 @@ class Swytchcode:
                 # Isolate failures per block so one failing tool doesn't drop the
                 # results for the other tool_use blocks in the same turn.
                 try:
-                    content = str(self.tools.execute(cid, getattr(block, "input", {}), _raw_inputs=raw_inputs, timeout=timeout))
+                    content = str(
+                        self.tools.execute(
+                            cid,
+                            getattr(block, "input", {}),
+                            _raw_inputs=raw_inputs,
+                            timeout=timeout,
+                        )
+                    )
                     is_error = False
                 except Exception as e:
                     content = f"Error executing {cid}: {e}"

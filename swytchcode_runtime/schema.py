@@ -37,8 +37,10 @@ def simplify(inputs: Any) -> dict:
 
                 req = spec.get("REQUIRED", False)
                 loc = str(spec.get("LOCATION", spec.get("location", ""))).lower()
-                is_required = loc == "path" or req is True or (
-                    isinstance(req, str) and req.strip().lower() == "true"
+                is_required = (
+                    loc == "path"
+                    or req is True
+                    or (isinstance(req, str) and req.strip().lower() == "true")
                 )
                 if is_required:
                     required.append(name)
@@ -66,7 +68,7 @@ def simplify(inputs: Any) -> dict:
             loc = str(spec.get("LOCATION", spec.get("location", ""))).lower()
             if loc == "path" and name not in required:
                 required.append(name)
-                
+
             if spec.get("type") == "object" and "properties" in spec:
                 spec = simplify(spec)  # recurse into nested objects
         keep[name] = spec
