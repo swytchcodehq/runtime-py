@@ -192,11 +192,11 @@ exec` for you (empty optional values are stripped before the call so APIs like S
 
 | Framework | Import | Who runs the tool loop |
 |-----------|--------|------------------------|
-| Anthropic Claude | `providers.anthropic.AnthropicProvider` | you (Messages API + `swx.handle_tool_calls`) |
-| OpenAI Agents SDK | `providers.openai_agents.OpenAIAgentsProvider` | the SDK |
-| Vercel AI SDK | `providers.vercel.VercelProvider` | the SDK |
-| LangGraph | `providers.langgraph.LangGraphProvider` | the prebuilt agent |
-| CrewAI | `providers.crewai.CrewAIProvider` | the crew |
+| Anthropic Claude | `from swytchcode_runtime.providers.anthropic import AnthropicProvider` | you (Messages API + `swx.handle_tool_calls`) |
+| OpenAI Agents SDK | `from swytchcode_runtime.providers.openai_agents import OpenAIAgentsProvider` | the SDK |
+| Vercel AI SDK | `from swytchcode_runtime.providers.vercel import VercelProvider` | the SDK |
+| LangGraph | `from swytchcode_runtime.providers.langgraph import LangGraphProvider` | the prebuilt agent |
+| CrewAI | `from swytchcode_runtime.providers.crewai import CrewAIProvider` | the crew |
 
 ### Non-agentic APIs (Anthropic Messages)
 
