@@ -50,6 +50,25 @@ def _resolve_bin() -> str:
     return "swytchcode"  # fall through; subprocess.run reports FileNotFoundError if still missing
 
 
+def _parse_classified_error(stderr: str) -> dict[str, Any] | None:
+    """
+    The CLI writes a classified JSON error to stderr on every non-zero exit that
+    isn't a signal (see internal/kernel/errors.go's WriteClassifiedError) - always
+    JSON, even in --raw mode. Parsing it here turns a raw JSON blob into a clean
+    message plus structured details, instead of leaving the developer to see
+    '{"error": "...", ...}' as the exception message.
+    """
+    if not stderr:
+        return None
+    try:
+        obj = json.loads(stderr)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(obj, dict) and isinstance(obj.get("error"), str):
+        return obj
+    return None
+
+
 def exec_(  # noqa: A001 - shadowing intentional for API consistency with JS/Go
     canonical_id: str,
     input: Any = None,
@@ -128,7 +147,7 @@ def exec_(  # noqa: A001 - shadowing intentional for API consistency with JS/Go
             if "SWYTCHCODE_BIN" in os.environ
             else "install it with: npm install -g swytchcode (or set SWYTCHCODE_BIN=/path/to/binary)"
         )
-        raise SwytchcodeError(f"Failed to spawn swytchcode — {hint}", e) from e
+        raise SwytchcodeError(f"Failed to spawn swytchcode - {hint}", e) from e
     except OSError as e:
         raise SwytchcodeError("Failed to run swytchcode", e) from e
 
@@ -136,6 +155,18 @@ def exec_(  # noqa: A001 - shadowing intentional for API consistency with JS/Go
     stdout = result.stdout.decode("utf-8", errors="replace")
 
     if result.returncode != 0:
+        classified = _parse_classified_error(stderr)
+        if classified:
+            msg = classified["error"]
+            if classified.get("suggested_action"):
+                msg = f"{msg} - {classified['suggested_action']}"
+            details = {
+                "category": classified.get("category"),
+                "retryable": classified.get("retryable"),
+                "suggested_action": classified.get("suggested_action"),
+                "docs_url": classified.get("docs_url"),
+            }
+            raise SwytchcodeError(msg, result.returncode, details)
         msg = stderr or "swytchcode exec failed"
         raise SwytchcodeError(msg, result.returncode)
 

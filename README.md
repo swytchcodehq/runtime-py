@@ -2,11 +2,11 @@
 
 Thin runtime wrapper around the Swytchcode CLI. Calls `swytchcode exec` for you so you can stay in Python without shell boilerplate.
 
-**Requires:** The `swytchcode` CLI must be installed. The binary is located automatically — no configuration needed in most environments. Resolution order:
+**Requires:** The `swytchcode` CLI must be installed. The binary is located automatically - no configuration needed in most environments. Resolution order:
 
-1. `SWYTCHCODE_BIN` env var — explicit override.
-2. `$PATH` lookup via `shutil.which` — the standard system resolution.
-3. Common install paths — `~/.local/bin`, `/usr/local/bin` (Unix) or `%LOCALAPPDATA%\Programs\swytchcode\bin` (Windows).
+1. `SWYTCHCODE_BIN` env var - explicit override.
+2. `$PATH` lookup via `shutil.which` - the standard system resolution.
+3. Common install paths - `~/.local/bin`, `/usr/local/bin` (Unix) or `%LOCALAPPDATA%\Programs\swytchcode\bin` (Windows).
 
 ## Install
 
@@ -34,10 +34,10 @@ result = exec("api.account.create", {"email": "test@example.com"})
 Equivalent to: `swytchcode exec api.account.create --json` with args on stdin.
 
 **Request input (args):** The second argument is the kernel **args** object (sent as JSON on stdin). Use this shape so the kernel builds the request correctly:
-- **body** — Request body (dict).
-- **params** — Query/path params (e.g. `{"id": "cluster-123"}`).
-- **Authorization** — Auth header value (e.g. `"Bearer token123"`).
-- **headers** — Additional request headers (e.g. `{"X-Request-Id": "abc-123"}`).
+- **body** - Request body (dict).
+- **params** - Query/path params (e.g. `{"id": "cluster-123"}`).
+- **Authorization** - Auth header value (e.g. `"Bearer token123"`).
+- **headers** - Additional request headers (e.g. `{"X-Request-Id": "abc-123"}`).
 - Other top-level keys are passed as query params.
 
 Example with body, params, and headers:
@@ -63,20 +63,22 @@ output = exec("api.report.export", {"id": "123"}, raw=True)
 
 ### Options
 
-- **cwd** – Working directory for the process (default: current directory).
-- **env** – Extra environment variables (merged with `os.environ`).
-- **raw** – If `True`, use `--raw` and return stdout as a string.
-- **dry_run** – If `True`, pass `--dry-run` to the CLI; request details (method, url, headers, body) are output instead of calling the server.
-- **allow_raw** – If `True`, pass `--allow-raw` to the CLI; required for executing raw methods (kernel has this disabled by default).
+- **cwd** - Working directory for the process (default: current directory).
+- **env** - Extra environment variables (merged with `os.environ`).
+- **raw** - If `True`, use `--raw` and return stdout as a string.
+- **dry_run** - If `True`, pass `--dry-run` to the CLI; request details (method, url, headers, body) are output instead of calling the server.
+- **allow_raw** - If `True`, pass `--allow-raw` to the CLI; required for executing raw methods (kernel has this disabled by default).
 
 This runtime invokes `swytchcode exec [canonical_id]` with the flags above. For full exec behavior, see the Swytchcode kernel documentation.
 
 ### Environment variables
 
+This runtime itself needs no environment configuration to run - all auth lives in the CLI's own session (`swytchcode login`, stored under `~/.swytchcode/`) or in `.swytchcode/` in your project. The variables below are for the rarer cases where you need to override that:
+
 | Variable | Description |
 |----------|-------------|
 | `SWYTCHCODE_BIN` | Override the resolved binary path. Set this only when automatic resolution does not find the correct binary (e.g. non-standard install locations or virtualised environments). |
-| `SWYTCHCODE_TOKEN` | Auth token passed to the CLI via the process environment. |
+| `SWYTCHCODE_TOKEN` | Service-token auth for headless environments (CI, servers) where an interactive `swytchcode login` isn't possible. Not needed for local development once you've run `swytchcode login`. |
 
 ### Error handling
 
@@ -91,6 +93,14 @@ except Exception as e:
     if is_swytchcode_error(e):
         print(e.message, e.cause)
     raise
+```
+
+On a non-zero exit the CLI writes a classified JSON error to stderr; `exec()` parses it into a clean `.message` and a structured `.details` dict (`category`, `retryable`, `suggested_action`, `docs_url`) instead of leaving you to parse the raw JSON yourself:
+
+```python
+except SwytchcodeError as e:
+    if e.details and e.details.get("category") == "auth":
+        print(e.details.get("suggested_action"))
 ```
 
 ## What this library is
@@ -133,9 +143,48 @@ For full, production-ready examples across all major frameworks, check out the [
 
 On top of `exec`, the runtime exposes a small agentic surface that turns Swytchcode tools into the native tool objects each agent framework expects. 
 
+### Tool-use guidance - `TOOL_USE_INSTRUCTIONS`
+
+Without an explicit nudge, models can be conservative about side-effecting actions (starring a repo, sending a payment, creating an issue) - they'll describe what they *would* do instead of actually calling the tool. `TOOL_USE_INSTRUCTIONS` is a short, framework-agnostic string that fixes this; concatenate it into whatever your provider calls its system prompt / instructions. It's scoped to only the tools this library provides, so it's safe to combine with instructions for other, unrelated tools in the same system prompt:
+
+```python
+from swytchcode_runtime import TOOL_USE_INSTRUCTIONS
+
+system = f"You are a helpful assistant.\n\n{TOOL_USE_INSTRUCTIONS}"
+```
+
 ### Quickstart: Anthropic SDK
 
-Here is a clean example of building a simple agent using the Anthropic SDK. We use `python-dotenv` to load environment variables (like `ANTHROPIC_API_KEY`).
+Here is a clean example of building a simple agent using the Anthropic SDK. It stars the [Swytchcode Examples repo](https://github.com/swytchcodehq/swytchcode-examples) on GitHub - a genuine OAuth-connected action (not just an API key passed on the request), so the setup below covers the real one-time flow: installing the CLI, logging in, and connecting a GitHub account.
+
+**One-time setup** (run once per machine/project):
+
+```bash
+# 1. Install the CLI (macOS/Linux; see https://cli.swytchcode.com for other platforms)
+curl -fsSL https://cli.swytchcode.com/install.sh | sh
+
+# 2. Scaffold .swytchcode/ + tooling.json in your project
+swytchcode init
+
+# 3. Log in (opens a browser; creates your Swytchcode session)
+swytchcode login
+
+# 4. Fetch the GitHub integration
+swytchcode get github
+
+# 5. Enable the "star a repo" tool - the trust boundary for what this project can call
+swytchcode add user.starred.update
+
+# 6. Connect your GitHub account (opens a browser for the OAuth flow)
+swytchcode auth connect github
+```
+
+Then add your Anthropic key to a `.env` file in your project root (used by `python-dotenv` below):
+
+```bash
+# .env
+ANTHROPIC_API_KEY=sk-ant-...
+```
 
 **Installation:**
 ```bash
@@ -148,29 +197,36 @@ pip install swytchcode-runtime anthropic python-dotenv
 import os
 from dotenv import load_dotenv
 import anthropic
-from swytchcode_runtime import Swytchcode
+from swytchcode_runtime import Swytchcode, TOOL_USE_INSTRUCTIONS
 from swytchcode_runtime.providers.anthropic import AnthropicProvider
 
 load_dotenv()  # Loads .env automatically
 
 def run_agent():
     client = anthropic.Anthropic()
-    
+
     # 1. Initialize Swytchcode with the Anthropic provider
     swx = Swytchcode(provider=AnthropicProvider())
-    
-    # 2. Fetch the tools you want your agent to use (e.g., Stripe tools)
-    tools = swx.tools.get(toolkits=["stripe"])
 
-    # 3. Pass them to Claude
+    # 2. Fetch the tools you want your agent to use (e.g., GitHub tools)
+    tools = swx.tools.get(toolkits=["github"])
+
+    # 3. Build the system prompt: your own instructions plus TOOL_USE_INSTRUCTIONS,
+    # which tells Claude to call the tool directly for action requests instead of
+    # just describing what it would do
+    system = f"You are a helpful assistant.\n\n{TOOL_USE_INSTRUCTIONS}"
+
     response = client.messages.create(
         model="claude-3-5-sonnet-latest",
         max_tokens=1024,
+        system=system,
         tools=tools,
-        messages=[{"role": "user", "content": "Refund charge ch_123 for $20."}],
+        messages=[{"role": "user", "content": "Star the swytchcodehq/swytchcode-examples repo on GitHub for me."}],
     )
 
-    print(response)
+    # 4. Run any tool calls Claude made and send the results back
+    results = swx.handle_tool_calls(response)
+    print(results)
 
 if __name__ == "__main__":
     run_agent()

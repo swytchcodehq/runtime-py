@@ -45,7 +45,7 @@ def simplify(inputs: Any) -> dict:
                 if is_required:
                     required.append(name)
 
-        # Composio-style rule: expose ALL fields to the model and list only the
+        # rule: expose ALL fields to the model and list only the
         # truly-required ones in `required`. A required-only approach hid optional
         # fields - which left all-optional tools (e.g. Stripe) with an empty schema
         # so the model called them with no arguments, and blinded the model to
