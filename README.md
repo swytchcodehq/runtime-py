@@ -217,7 +217,7 @@ def run_agent():
     system = f"You are a helpful assistant.\n\n{TOOL_USE_INSTRUCTIONS}"
 
     response = client.messages.create(
-        model="claude-opus-5",
+        model="claude-sonnet-5",
         max_tokens=1024,
         system=system,
         tools=tools,
