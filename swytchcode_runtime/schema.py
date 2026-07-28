@@ -1,7 +1,8 @@
 """Simplify a tool's input schema for the LLM: expose all fields, mark required ones."""
 
 from __future__ import annotations
-from typing import Any, Optional
+
+from typing import Any
 
 
 def simplify(inputs: Any) -> dict:
@@ -24,9 +25,7 @@ def simplify(inputs: Any) -> dict:
                     t = "number"
                 elif t == "bool":
                     t = "boolean"
-                elif t == "object":
-                    t = "object"
-                elif t == "any":
+                elif t == "object" or t == "any":
                     t = "object"
                 elif t.startswith("[]"):
                     t = "array"
@@ -108,8 +107,8 @@ def to_pydantic_model(schema: dict, name: str = "ArgsSchema") -> Any:
         if field_name in required:
             fields[field_name] = (field_type, ...)
         else:
-            # Optional[...] so an explicit null is accepted (pydantic v2 rejects
+            # `X | None` so an explicit null is accepted (pydantic v2 rejects
             # None for a bare non-optional annotation).
-            fields[field_name] = (Optional[field_type], None)
+            fields[field_name] = (field_type | None, None)
 
     return create_model(name, **fields)

@@ -1,13 +1,14 @@
 """Run a swytchcode CLI subcommand with --json and parse the output."""
 
 from __future__ import annotations
+
 import json
 import os
 import subprocess
 from typing import Any
 
-from .exec import _resolve_bin
 from .errors import SwytchcodeError
+from .exec import _resolve_bin
 
 
 def run_cli(
@@ -32,6 +33,7 @@ def run_cli(
             cwd=cwd or os.getcwd(),
             env=run_env,
             timeout=timeout,
+            check=False,
         )
     except FileNotFoundError as e:
         raise SwytchcodeError(

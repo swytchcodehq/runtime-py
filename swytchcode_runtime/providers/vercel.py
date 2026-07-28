@@ -1,6 +1,7 @@
 """Vercel AI SDK provider (Python equivalent)."""
 
 from __future__ import annotations
+
 from .base import Provider, Tool
 
 

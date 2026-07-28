@@ -1,16 +1,16 @@
 """Thin runtime wrapper around the Swytchcode CLI."""
 
+from .client import Swytchcode
 from .errors import SwytchcodeError, is_swytchcode_error
 from .exec import exec_ as exec
-from .client import Swytchcode
 from .prompts import TOOL_USE_INSTRUCTIONS
 
 __all__ = [
-    "exec",
+    "TOOL_USE_INSTRUCTIONS",
     "Swytchcode",
     "SwytchcodeError",
+    "exec",
     "is_swytchcode_error",
-    "TOOL_USE_INSTRUCTIONS",
 ]
 
 
