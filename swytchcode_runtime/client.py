@@ -1,15 +1,16 @@
 """High-level agentic client on top of the existing exec()."""
 
 from __future__ import annotations
-from typing import Any, Optional
 
-import re
 import hashlib
+import re
+from typing import Any
 
-from . import discover as _discover, schema as _schema, manage as _manage
+from . import discover as _discover
+from . import manage as _manage
+from . import schema as _schema
 from .exec import exec_ as _exec
 from .providers.base import Provider, Tool
-
 
 MAX_TOOL_NAME_LEN = 64  # OpenAI and Anthropic strict limit
 
@@ -107,7 +108,7 @@ def _split_by_location(inputs: Any, flat_args: dict) -> dict:
 
 
 class _Tools:
-    def __init__(self, client: "Swytchcode"):
+    def __init__(self, client: Swytchcode):
         self._c = client
         # Maps a sanitized tool name (dots -> underscores) back to its canonical
         # ID, populated as tools are built. Used to reverse names in
@@ -199,7 +200,7 @@ class _Tools:
 
 
 class Swytchcode:
-    def __init__(self, provider: Optional[Provider] = None):
+    def __init__(self, provider: Provider | None = None):
         self.provider = provider
         self.tools = _Tools(self)
 
@@ -229,7 +230,7 @@ class Swytchcode:
                         )
                     )
                     is_error = False
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     content = f"Error executing {cid}: {e}"
                     is_error = True
                 results.append(

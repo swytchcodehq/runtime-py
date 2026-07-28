@@ -1,7 +1,9 @@
 """Find tools by intent and read their schemas."""
 
 from __future__ import annotations
+
 import logging
+
 from .cli import run_cli
 
 logger = logging.getLogger(__name__)
@@ -19,7 +21,7 @@ def info(canonical_id: str) -> dict:
         if isinstance(result, list):
             return result[0] if result else {}
         return result
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         # Broad by design: any CLI/parse failure degrades to an empty schema
         # rather than breaking tool discovery. Logged (not printed) so it
         # respects the host app's logging config.

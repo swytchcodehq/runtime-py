@@ -69,7 +69,7 @@ def _parse_classified_error(stderr: str) -> dict[str, Any] | None:
     return None
 
 
-def exec_(  # noqa: A001 - shadowing intentional for API consistency with JS/Go
+def exec_(
     canonical_id: str,
     input: Any = None,
     *,
@@ -136,6 +136,7 @@ def exec_(  # noqa: A001 - shadowing intentional for API consistency with JS/Go
             cwd=cwd or os.getcwd(),
             env=run_env,
             timeout=timeout,
+            check=False,
         )
     except subprocess.TimeoutExpired as e:
         raise SwytchcodeError(
