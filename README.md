@@ -215,37 +215,28 @@ def run_agent():
 
     messages = [{"role": "user", "content": "Star the swytchcodehq/swytchcode-examples repo on GitHub for me."}]
 
-    response = client.messages.create(
-        model="claude-sonnet-5",
-        max_tokens=1024,
-        system=system,
-        tools=tools,
-        messages=messages,
-    )
-
-    # 4. Run any tool calls Claude made, then send the results back so Claude
-    # can turn them into a final natural-language reply instead of a raw tool_result block
-    tool_results = swx.handle_tool_calls(response)
-
-    if tool_results:
-        messages.append({"role": "assistant", "content": response.content})
-        messages.append({"role": "user", "content": tool_results})
-
-        follow_up = client.messages.create(
-            model="claude-opus-5",
+    # 4. Loop until Claude stops requesting tool calls: run any tool calls
+    # Claude made and send the results back so it can keep working toward
+    # a final natural-language reply instead of stopping after one round
+    while True:
+        response = client.messages.create(
+            model="claude-sonnet-5",
             max_tokens=1024,
             system=system,
             tools=tools,
             messages=messages,
         )
+        messages.append({"role": "assistant", "content": response.content})
 
-        for block in follow_up.content:
-            if block.type == "text":
-                print(block.text)
-    else:
-        for block in response.content:
-            if block.type == "text":
-                print(block.text)
+        if response.stop_reason != "tool_use":
+            break
+
+        tool_results = swx.handle_tool_calls(response)
+        messages.append({"role": "user", "content": tool_results})
+
+    for block in response.content:
+        if block.type == "text":
+            print(block.text)
 
 if __name__ == "__main__":
     run_agent()
