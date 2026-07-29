@@ -228,6 +228,8 @@ def run_agent():
         )
         messages.append({"role": "assistant", "content": response.content})
 
+        if response.stop_reason == "max_tokens":
+            raise RuntimeError("Response truncated at max_tokens - increase the limit and retry")
         if response.stop_reason != "tool_use":
             break
 
