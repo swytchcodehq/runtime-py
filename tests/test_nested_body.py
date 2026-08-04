@@ -62,6 +62,40 @@ class TestNestedBodySchema(unittest.TestCase):
         self.assertEqual(start["properties"]["dateTime"]["type"], "string")
         self.assertEqual(start["required"], ["dateTime"])
 
+    def test_array_of_nested_objects_expands(self):
+        inputs = [
+            {
+                "body": {
+                    "LOCATION": "body",
+                    "TYPE": "OBJECT",
+                    "schema": {
+                        "properties": {
+                            "attendees": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "schema": {
+                                        "properties": {
+                                            "email": {
+                                                "type": "string",
+                                                "required": True,
+                                            }
+                                        }
+                                    },
+                                },
+                            }
+                        }
+                    },
+                }
+            }
+        ]
+        body = simplify(inputs)["properties"]["body"]
+        attendees = body["properties"]["attendees"]
+        self.assertEqual(attendees["type"], "array")
+        self.assertEqual(attendees["items"]["type"], "object")
+        self.assertEqual(attendees["items"]["properties"]["email"]["type"], "string")
+        self.assertEqual(attendees["items"]["required"], ["email"])
+
     def test_freeform_object_has_no_properties(self):
         body = simplify([{"body": {"LOCATION": "body", "TYPE": "OBJECT"}}])[
             "properties"
@@ -167,4 +201,3 @@ def body_annotation_args(model, field):
 
 if __name__ == "__main__":
     unittest.main()
-

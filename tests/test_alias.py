@@ -33,9 +33,12 @@ class TestAlias(unittest.TestCase):
         alias2 = _make_alias("a_b", taken)  # Collides on sanitize
 
         self.assertNotEqual(alias1, alias2)
-        
+
         import re
-        self.assertTrue(re.search(r"_[0-9a-f]{6}$", alias2) or re.search(r"_[0-9a-f]{6}$", alias1))
+
+        self.assertTrue(
+            re.search(r"_[0-9a-f]{6}$", alias2) or re.search(r"_[0-9a-f]{6}$", alias1)
+        )
 
 
 if __name__ == "__main__":
