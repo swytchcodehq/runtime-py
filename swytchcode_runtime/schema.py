@@ -26,7 +26,7 @@ def _json_type(raw: Any) -> str:
     t = str(raw or "string").strip().lower()
     if t.startswith("[]"):
         return "array"
-    if t.startswith("struct(") or t.startswith("map("):
+    if t.startswith(("struct(", "map(")):
         return "object"
     return _TYPE_MAP.get(t, "string")
 
