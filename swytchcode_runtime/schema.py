@@ -4,6 +4,107 @@ from __future__ import annotations
 
 from typing import Any
 
+# Map wrekenfile/CLI type names onto JSON Schema types. Lowercase keys already in
+# JSON Schema form (e.g. "string", "integer") map to themselves so a nested
+# `schema` block from `swytchcode info` passes through unchanged.
+_TYPE_MAP = {
+    "int": "integer",
+    "integer": "integer",
+    "float": "number",
+    "number": "number",
+    "double": "number",
+    "bool": "boolean",
+    "boolean": "boolean",
+    "object": "object",
+    "any": "object",
+    "string": "string",
+    "array": "array",
+}
+
+
+def _json_type(raw: Any) -> str:
+    t = str(raw or "string").strip().lower()
+    if t.startswith("[]"):
+        return "array"
+    if t.startswith(("struct(", "map(")):
+        return "object"
+    return _TYPE_MAP.get(t, "string")
+
+
+def _is_valid_name(name: str) -> bool:
+    """Return True if name is a valid tool parameter identifier.
+
+    Anthropic and OpenAI require parameter names to match ^[a-zA-Z0-9_-]+$.
+    Google API schemas include system parameters like $.xgafv which cause
+    Anthropic API 400 Bad Request errors if included in tool schemas.
+    """
+    if not name or name.startswith("$"):
+        return False
+    return all(c.isalnum() or c in ("_", "-") for c in name)
+
+
+def _nested(spec: dict) -> dict | None:
+    """Locate the nested object schema on a field spec.
+
+    `swytchcode info` nests an object body's fields under a `schema` key
+    (``{"TYPE": "OBJECT", "schema": {"properties": {...}, "required": [...]}}``),
+    while a plain JSON Schema keeps `properties` inline. Handle both.
+    """
+    inner = spec.get("schema")
+    if isinstance(inner, dict) and isinstance(inner.get("properties"), dict):
+        return inner
+    if isinstance(spec.get("properties"), dict):
+        return spec
+    return None
+
+
+def _is_required(spec: dict) -> bool:
+    r = spec.get("required", spec.get("REQUIRED"))
+    return r is True or (isinstance(r, str) and r.strip().lower() == "true")
+
+
+def _expand(spec: Any) -> dict:
+    """Convert one field spec into a JSON Schema fragment, recursing into nested
+    object properties and array items so the model sees the full shape."""
+    if not isinstance(spec, dict):
+        return {"type": "string"}
+
+    t = _json_type(spec.get("TYPE", spec.get("type", "string")))
+    out: dict = {"type": t}
+
+    desc = spec.get("DESC", spec.get("description"))
+    if desc:
+        out["description"] = desc
+
+    if t == "object":
+        nested = _nested(spec)
+        if nested is not None:
+            props = nested["properties"]
+            out["properties"] = {
+                name: _expand(child)
+                for name, child in props.items()
+                if _is_valid_name(name)
+            }
+            explicit = nested.get("required")
+            required = list(explicit) if isinstance(explicit, list) else []
+            for name, child in props.items():
+                if (
+                    _is_valid_name(name)
+                    and isinstance(child, dict)
+                    and _is_required(child)
+                    and name not in required
+                ):
+                    required.append(name)
+            out["required"] = [name for name in required if name in out["properties"]]
+    elif t == "array":
+        items = spec.get("items")
+        if items is None and isinstance(spec.get("schema"), dict):
+            items = spec["schema"].get("items")
+        if isinstance(items, dict):
+            out["items"] = _expand(items)
+
+    return out
+
 
 def simplify(inputs: Any) -> dict:
     # Handle Wrekenfile shape: a list of single-key dicts (e.g. [{"amount": {"TYPE": "INT"...}}])
@@ -14,25 +115,13 @@ def simplify(inputs: Any) -> dict:
             if not isinstance(item, dict):
                 continue
             for name, spec in item.items():
-                if not isinstance(spec, dict):
+                if not isinstance(spec, dict) or not _is_valid_name(name):
                     continue
 
-                # Default to string if TYPE is missing
-                t = spec.get("TYPE", "STRING").lower()
-                if t == "int":
-                    t = "integer"
-                elif t in ("float", "number", "double"):
-                    t = "number"
-                elif t == "bool":
-                    t = "boolean"
-                elif t == "object" or t == "any":
-                    t = "object"
-                elif t.startswith("[]"):
-                    t = "array"
-                else:
-                    t = "string"
-
-                props[name] = {"type": t, "description": spec.get("DESC", "")}
+                # Expand into full JSON Schema, keeping nested object/array shape
+                # (a body's fields live under spec["schema"] and were previously
+                # dropped, leaving the model blind to what to send).
+                props[name] = _expand(spec)
 
                 req = spec.get("REQUIRED", False)
                 loc = str(spec.get("LOCATION", spec.get("location", ""))).lower()
@@ -63,13 +152,15 @@ def simplify(inputs: Any) -> dict:
     # original required list only for the `required` key so optional/nested
     # fields stay optional instead of being dropped or forced required.
     for name, spec in props.items():
+        if not _is_valid_name(name):
+            continue
         if isinstance(spec, dict):
             loc = str(spec.get("LOCATION", spec.get("location", ""))).lower()
             if loc == "path" and name not in required:
                 required.append(name)
 
-            if spec.get("type") == "object" and "properties" in spec:
-                spec = simplify(spec)  # recurse into nested objects
+            if _json_type(spec.get("type", spec.get("TYPE"))) in ("object", "array"):
+                spec = _expand(spec)  # expand nested objects/arrays
         keep[name] = spec
 
     return {
@@ -102,7 +193,14 @@ def to_pydantic_model(schema: dict, name: str = "ArgsSchema") -> Any:
         elif t == "array":
             field_type = list
         elif t == "object":
-            field_type = to_pydantic_model(field_info, f"{name}_{field_name}")
+            # Only build a nested model when the object's fields are known.
+            # A property-less object (freeform body) becomes a plain dict: an
+            # empty model would silently drop every value the agent passed and
+            # then fail to JSON-serialize.
+            if field_info.get("properties"):
+                field_type = to_pydantic_model(field_info, f"{name}_{field_name}")
+            else:
+                field_type = dict
 
         if field_name in required:
             fields[field_name] = (field_type, ...)
