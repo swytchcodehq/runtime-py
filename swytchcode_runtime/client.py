@@ -51,6 +51,29 @@ def _toolkit_matches(toolkit: str, integration: str) -> bool:
     return tk == project or tk == lib_slug or tk == prefix.lower()
 
 
+def _to_plain(obj: Any) -> Any:
+    """Recursively convert Pydantic models into plain JSON-serializable values.
+
+    LangGraph and CrewAI validate a tool call's arguments against the Pydantic
+    args_schema, so a nested-object field such as `body` reaches execute() as a
+    model instance rather than a dict. json.dumps can't serialize that, which is
+    what raised "Object of type <tool>Schema_body is not JSON serializable".
+    Flattening to dicts here also lets _strip_empty run over the body, which it
+    skips for anything that isn't a dict or list.
+    """
+    dump = getattr(obj, "model_dump", None)  # pydantic v2
+    if callable(dump):
+        return dump(mode="json")
+    legacy = getattr(obj, "dict", None)  # pydantic v1
+    if callable(legacy) and hasattr(obj, "__fields__"):
+        return _to_plain(legacy())
+    if isinstance(obj, dict):
+        return {k: _to_plain(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_plain(v) for v in obj]
+    return obj
+
+
 def _strip_empty(obj: Any) -> Any:
     """Recursively drop keys whose value is None or an empty string ("").
 
@@ -126,7 +149,9 @@ class _Tools:
         return p.format_tools(neutral) if p else neutral
 
     def execute(self, canonical_id: str, args: dict, **options) -> Any:
-        final_args = dict(args)
+        # Flatten any Pydantic models (from agentic providers' arg validation)
+        # to plain values before routing/serialization.
+        final_args = _to_plain(dict(args))
 
         # If args are flat (no body/params top-level keys), wrap them in body
         # as expected by the Swytchcode CLI kernel (like in run-workflow.js)
