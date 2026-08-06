@@ -155,6 +155,16 @@ def exec_(
     stderr = result.stderr.decode("utf-8", errors="replace").strip()
     stdout = result.stdout.decode("utf-8", errors="replace")
 
+    if "demo_mode" in stderr or "data is simulated" in stderr:
+        demo_allowed = (env and env.get("SWYTCHCODE_DEMO") == "1") or os.environ.get(
+            "SWYTCHCODE_DEMO"
+        ) == "1"
+        if not demo_allowed:
+            raise SwytchcodeError(
+                f"Swytchcode CLI executed in simulated demo mode: {stderr}. "
+                "Initialize a project with `swytchcode init` or pass --demo explicitly."
+            )
+
     if result.returncode != 0:
         classified = _parse_classified_error(stderr)
         if classified:
