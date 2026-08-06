@@ -102,6 +102,8 @@ def _expand(spec: Any) -> dict:
             items = spec["schema"].get("items")
         if isinstance(items, dict):
             out["items"] = _expand(items)
+        else:
+            out["items"] = {"type": "string"}
 
     return out
 
@@ -191,7 +193,7 @@ def to_pydantic_model(schema: dict, name: str = "ArgsSchema") -> Any:
         elif t == "boolean":
             field_type = bool
         elif t == "array":
-            field_type = list
+            field_type = list[str]
         elif t == "object":
             # Only build a nested model when the object's fields are known.
             # A property-less object (freeform body) becomes a plain dict: an
