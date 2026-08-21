@@ -10,7 +10,7 @@ from typing import Any
 from .errors import SwytchcodeError
 
 
-def _resolve_bin() -> str:
+def _resolve_bin(env: dict[str, str]) -> str:
     """
     Resolve the swytchcode binary path using the following order:
 
@@ -19,25 +19,26 @@ def _resolve_bin() -> str:
     3. Common install-path fallbacks for when PATH is not configured.
     """
     # 1. Explicit override
-    explicit = os.environ.get("SWYTCHCODE_BIN", "").strip()
+    explicit = env.get("SWYTCHCODE_BIN", "").strip()
     if explicit:
         return explicit
 
     # 2. PATH lookup
-    found = shutil.which("swytchcode")
+    found = shutil.which("swytchcode", path=env.get("PATH"))
     if found:
         return found
 
     # 3. Common install-path fallbacks
     if sys.platform == "win32":
-        local_app_data = os.environ.get("LOCALAPPDATA", "")
+        local_app_data = env.get("LOCALAPPDATA", "")
         candidates = [
             os.path.join(
                 local_app_data, "Programs", "swytchcode", "bin", "swytchcode.exe"
             ),
         ]
     else:
-        home = os.path.expanduser("~")
+        # Fallback to os.environ for HOME if not explicitly in env
+        home = env.get("HOME") or os.path.expanduser("~")
         candidates = [
             os.path.join(home, ".local", "bin", "swytchcode"),
             "/usr/local/bin/swytchcode",
@@ -112,17 +113,17 @@ def exec_(
     if not canonical_id:
         raise SwytchcodeError("canonical_id must be a non-empty string")
 
+    run_env = os.environ.copy()
+    if env:
+        run_env.update(env)
+
     flag = "--raw" if raw else "--json"
-    bin_path = _resolve_bin()
+    bin_path = _resolve_bin(run_env)
     cmd = [bin_path, "exec", canonical_id, flag]
     if dry_run:
         cmd.append("--dry-run")
     if allow_raw:
         cmd.append("--allow-raw")
-
-    run_env = os.environ.copy()
-    if env:
-        run_env.update(env)
 
     stdin_payload: bytes | None = None
     if input is not None:
