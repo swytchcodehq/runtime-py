@@ -18,13 +18,13 @@ def run_cli(
     env: dict | None = None,
     timeout: float | None = 60,
 ) -> Any:
-    cmd = [_resolve_bin(), *args]
-    if "--json" not in args:
-        cmd.append("--json")
-
     run_env = os.environ.copy()
     if env:
         run_env.update(env)
+
+    cmd = [_resolve_bin(run_env), *args]
+    if "--json" not in args:
+        cmd.append("--json")
 
     try:
         r = subprocess.run(
