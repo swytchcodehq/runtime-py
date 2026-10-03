@@ -17,9 +17,11 @@ def run_cli(
     cwd: str | None = None,
     env: dict | None = None,
     timeout: float | None = 60,
+    input: str | None = None,
+    json_output: bool = True,
 ) -> Any:
     cmd = [_resolve_bin(), *args]
-    if "--json" not in args:
+    if json_output and "--json" not in args:
         cmd.append("--json")
 
     run_env = os.environ.copy()
@@ -29,6 +31,7 @@ def run_cli(
     try:
         r = subprocess.run(
             cmd,
+            input=input.encode("utf-8") if input is not None else None,
             capture_output=True,
             cwd=cwd or os.getcwd(),
             env=run_env,
@@ -51,7 +54,7 @@ def run_cli(
         )
 
     out = r.stdout.decode("utf-8", "replace").strip()
-    if not out:
+    if not out or not json_output:
         return None
 
     try:

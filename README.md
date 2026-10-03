@@ -68,6 +68,8 @@ output = exec("api.report.export", {"id": "123"}, raw=True)
 - **raw** - If `True`, use `--raw` and return stdout as a string.
 - **dry_run** - If `True`, pass `--dry-run` to the CLI; request details (method, url, headers, body) are output instead of calling the server.
 - **allow_raw** - If `True`, pass `--allow-raw` to the CLI; required for executing raw methods (kernel has this disabled by default).
+- **tenant_id** - Run the call for one end user of your app, with their own connected account (passes `--tenant`). Never falls back to your account. See [Multi-tenant apps](#multi-tenant-apps).
+- **tenant_label** - How approvers see that end user, e.g. `"Alice Smith (alice@acme.com)"` (passes `--tenant-label`). Needs `tenant_id`.
 
 This runtime invokes `swytchcode exec [canonical_id]` with the flags above. For full exec behavior, see the Swytchcode kernel documentation.
 
@@ -102,6 +104,22 @@ except SwytchcodeError as e:
     if e.details and e.details.get("category") == "auth":
         print(e.details.get("suggested_action"))
 ```
+
+## Multi-tenant apps
+
+When your app's own users each connect their accounts, pass your id for the logged-in user (from your server's session, never from the browser) on every call made for them:
+
+```python
+from swytchcode_runtime import connect, save_key, disconnect, exec, Swytchcode
+
+url = connect("gmail", user.id)["url"]                  # one-time link (OAuth), open it from the user's click
+save_key("stripe", user.id, key)                        # API-key providers: stored on your server only
+exec("gmail.user.profile.get", {"params": {"userId": "me"}}, tenant_id=user.id)
+client = Swytchcode(provider, tenant_id=user.id)        # agents: every tool runs for this user
+disconnect("gmail", user.id)
+```
+
+An end user who has not connected raises `SwytchcodeError` with `details["category"] == "tenant_not_connected"`. Guide: https://docs.swytchcode.com/guides/multi-tenant/
 
 ## What this library is
 

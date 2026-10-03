@@ -4,13 +4,17 @@ from .client import Swytchcode
 from .errors import SwytchcodeError, is_swytchcode_error
 from .exec import exec_ as exec
 from .prompts import TOOL_USE_INSTRUCTIONS
+from .tenants import connect, disconnect, save_key
 
 __all__ = [
     "TOOL_USE_INSTRUCTIONS",
     "Swytchcode",
     "SwytchcodeError",
+    "connect",
+    "disconnect",
     "exec",
     "is_swytchcode_error",
+    "save_key",
 ]
 
 

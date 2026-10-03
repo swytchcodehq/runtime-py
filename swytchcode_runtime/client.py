@@ -9,6 +9,7 @@ from typing import Any
 from . import discover as _discover
 from . import manage as _manage
 from . import schema as _schema
+from .errors import SwytchcodeError
 from .exec import exec_ as _exec
 from .providers.base import Provider, Tool
 
@@ -145,7 +146,14 @@ class _Tools:
             final_args["body"] = _strip_empty(final_args["body"])
         if isinstance(final_args.get("params"), (dict, list)):
             final_args["params"] = _strip_empty(final_args["params"])
-        # Forward exec options (dry_run, raw, allow_raw, cwd, env) to the CLI.
+        # A client bound to one end user runs every tool for that user unless
+        # the call names another one itself.
+        if self._c.tenant_id is not None and options.get("tenant_id") is None:
+            options["tenant_id"] = self._c.tenant_id
+            if options.get("tenant_label") is None:
+                options["tenant_label"] = self._c.tenant_label
+        # Forward exec options (dry_run, raw, allow_raw, cwd, env, tenant_id,
+        # tenant_label) to the CLI.
         return _exec(canonical_id, final_args, **options)
 
     def _tool(self, cid: str) -> Tool:
@@ -200,8 +208,31 @@ class _Tools:
 
 
 class Swytchcode:
-    def __init__(self, provider: Provider | None = None):
+    def __init__(
+        self,
+        provider: Provider | None = None,
+        *,
+        tenant_id: str | None = None,
+        tenant_label: str | None = None,
+    ):
+        """
+        tenant_id binds the client to one end user of your app: every tool it
+        runs, including those an AI agent picks, uses that user's connected
+        accounts and never yours. Create one client per request, from your
+        server's session. tenant_label is how approvers see that end user, for
+        example "Alice Smith (alice@acme.com)".
+        """
         self.provider = provider
+        if tenant_id is not None:
+            tenant_id = tenant_id.strip()
+            # An empty id would quietly run the agent's tools on your own account.
+            if not tenant_id:
+                raise SwytchcodeError("tenant_id must be a non-empty string when set")
+        self.tenant_id = tenant_id
+        tenant_label = (tenant_label or "").strip() or None
+        if tenant_label and not tenant_id:
+            raise SwytchcodeError("tenant_label needs tenant_id")
+        self.tenant_label = tenant_label
         self.tools = _Tools(self)
 
     def handle_tool_calls(
