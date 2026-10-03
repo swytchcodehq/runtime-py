@@ -10,7 +10,7 @@ from typing import Any
 from .errors import SwytchcodeError
 
 
-def _resolve_bin() -> str:
+def _resolve_bin(env: dict[str, str]) -> str:
     """
     Resolve the swytchcode binary path using the following order:
 
@@ -19,25 +19,26 @@ def _resolve_bin() -> str:
     3. Common install-path fallbacks for when PATH is not configured.
     """
     # 1. Explicit override
-    explicit = os.environ.get("SWYTCHCODE_BIN", "").strip()
+    explicit = env.get("SWYTCHCODE_BIN", "").strip()
     if explicit:
         return explicit
 
     # 2. PATH lookup
-    found = shutil.which("swytchcode")
+    found = shutil.which("swytchcode", path=env.get("PATH"))
     if found:
         return found
 
     # 3. Common install-path fallbacks
     if sys.platform == "win32":
-        local_app_data = os.environ.get("LOCALAPPDATA", "")
+        local_app_data = env.get("LOCALAPPDATA", "")
         candidates = [
             os.path.join(
                 local_app_data, "Programs", "swytchcode", "bin", "swytchcode.exe"
             ),
         ]
     else:
-        home = os.path.expanduser("~")
+        # Fallback to os.environ for HOME if not explicitly in env
+        home = env.get("HOME") or os.path.expanduser("~")
         candidates = [
             os.path.join(home, ".local", "bin", "swytchcode"),
             "/usr/local/bin/swytchcode",
@@ -130,8 +131,12 @@ def exec_(
     if tenant_label and not tenant_id:
         raise SwytchcodeError("tenant_label needs tenant_id")
 
+    run_env = os.environ.copy()
+    if env:
+        run_env.update(env)
+
     flag = "--raw" if raw else "--json"
-    bin_path = _resolve_bin()
+    bin_path = _resolve_bin(run_env)
     cmd = [bin_path, "exec", canonical_id, flag]
     if dry_run:
         cmd.append("--dry-run")
@@ -141,10 +146,6 @@ def exec_(
         cmd.extend(["--tenant", tenant_id])
     if tenant_label:
         cmd.extend(["--tenant-label", tenant_label])
-
-    run_env = os.environ.copy()
-    if env:
-        run_env.update(env)
 
     stdin_payload: bytes | None = None
     if input is not None:
@@ -176,6 +177,16 @@ def exec_(
 
     stderr = result.stderr.decode("utf-8", errors="replace").strip()
     stdout = result.stdout.decode("utf-8", errors="replace")
+
+    if "demo_mode" in stderr or "data is simulated" in stderr:
+        demo_allowed = (env and env.get("SWYTCHCODE_DEMO") == "1") or os.environ.get(
+            "SWYTCHCODE_DEMO"
+        ) == "1"
+        if not demo_allowed:
+            raise SwytchcodeError(
+                f"Swytchcode CLI executed in simulated demo mode: {stderr}. "
+                "Initialize a project with `swytchcode init` or pass --demo explicitly."
+            )
 
     if result.returncode != 0:
         classified = _parse_classified_error(stderr)
