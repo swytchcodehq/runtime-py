@@ -80,6 +80,8 @@ def exec_(
     dry_run: bool = False,
     allow_raw: bool = False,
     timeout: float | None = None,
+    tenant_id: str | None = None,
+    tenant_label: str | None = None,
 ) -> Any:
     """
     Run swytchcode exec <canonical_id> with optional JSON args on stdin.
@@ -102,6 +104,14 @@ def exec_(
         dry_run: If True, pass --dry-run; request details are output instead of calling the server.
         allow_raw: If True, pass --allow-raw; required for executing raw methods (kernel default is disabled).
         timeout: Optional timeout in seconds for the subprocess.
+        tenant_id: Run the call for one end user (tenant) of your app, with their own
+            connected account (passes --tenant). Use your own id for the logged-in user,
+            taken from your server's session. Never falls back to your own account: if
+            this user has not connected the provider, it fails with category
+            "tenant_not_connected".
+        tenant_label: How approvers see this end user when a policy asks for human
+            approval, for example "Alice Smith (alice@acme.com)" (passes
+            --tenant-label). Needs tenant_id.
 
     Returns:
         Parsed result (any) or raw string when raw is True.
@@ -112,6 +122,14 @@ def exec_(
     canonical_id = canonical_id.strip()
     if not canonical_id:
         raise SwytchcodeError("canonical_id must be a non-empty string")
+    # An empty tenant id must never quietly run the call on the developer's own account.
+    if tenant_id is not None:
+        tenant_id = tenant_id.strip()
+        if not tenant_id:
+            raise SwytchcodeError("tenant_id must be a non-empty string when set")
+    tenant_label = (tenant_label or "").strip()
+    if tenant_label and not tenant_id:
+        raise SwytchcodeError("tenant_label needs tenant_id")
 
     run_env = os.environ.copy()
     if env:
@@ -124,6 +142,10 @@ def exec_(
         cmd.append("--dry-run")
     if allow_raw:
         cmd.append("--allow-raw")
+    if tenant_id:
+        cmd.extend(["--tenant", tenant_id])
+    if tenant_label:
+        cmd.extend(["--tenant-label", tenant_label])
 
     stdin_payload: bytes | None = None
     if input is not None:
