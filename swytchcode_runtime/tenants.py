@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from .cli import run_cli
 from .errors import SwytchcodeError
 
@@ -77,6 +79,51 @@ def save_key(
     if not isinstance(out, dict) or out.get("stored") != "local":
         raise SwytchcodeError(
             f"{provider} does not use an API key; use connect() instead", out
+        )
+
+
+def save_credentials(
+    provider: str,
+    tenant_id: str,
+    credentials: dict[str, str],
+    *,
+    cwd: str | None = None,
+    env: dict[str, str] | None = None,
+) -> None:
+    """
+    Save an end user's credentials for a provider whose requests are signed
+    (crypto exchanges): several fields, such as ``{"api_key": ..., "secret_key":
+    ..., "passphrase": ...}``, named as the provider's signing recipe names them
+    (``swytchcode info`` shows the auth block). They are stored encrypted on this
+    machine only and never sent to Swytchcode; the CLI signs each of this end
+    user's requests with them. Like ``save_key()``, this counts the end user
+    toward your plan's end-user limit.
+    """
+    if not isinstance(credentials, dict):
+        raise SwytchcodeError("credentials must be a dict of field names to values")
+    fields: dict[str, str] = {}
+    for name, value in credentials.items():
+        if not isinstance(value, str):
+            raise SwytchcodeError(f"credential {name} must be a string")
+        if value.strip():
+            fields[name] = value.strip()
+    if not fields:
+        raise SwytchcodeError("credentials must not be empty")
+    # One JSON line on stdin: the values never appear in the process arguments.
+    out = run_cli(
+        ["auth", "connect", *_tenant_args(provider, tenant_id), "--json"],
+        cwd=cwd,
+        env=env,
+        input=json.dumps(fields, separators=(",", ":")) + "\n",
+    )
+    if (
+        not isinstance(out, dict)
+        or out.get("stored") != "local"
+        or out.get("auth_type") != "request_signature"
+    ):
+        raise SwytchcodeError(
+            f"{provider} does not use signed requests; use save_key() or connect() instead",
+            out,
         )
 
 
