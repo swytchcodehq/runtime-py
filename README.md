@@ -114,7 +114,7 @@ from swytchcode_runtime import connect, save_key, save_credentials, disconnect, 
 
 url = connect("gmail", user.id)["url"]                  # one-time link (OAuth), open it from the user's click
 save_key("stripe", user.id, key)                        # API-key providers: stored on your server only
-save_credentials("coinswitch", user.id,                 # signed requests (crypto exchanges): every field
+save_credentials("binance", user.id,                    # signed requests (crypto exchanges): every field
                  {"api_key": api_key, "secret_key": secret_key})  # the exchange needs, stored on your server only
 exec("gmail.user.profile.get", {"params": {"userId": "me"}}, tenant_id=user.id)
 client = Swytchcode(provider, tenant_id=user.id)        # agents: every tool runs for this user
