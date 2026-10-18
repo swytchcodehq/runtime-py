@@ -3,7 +3,7 @@ import subprocess
 import unittest
 from unittest import mock
 
-from swytchcode_runtime import SwytchcodeError, connect, disconnect, exec, save_key
+from swytchcode_runtime import SwytchcodeError, connect, disconnect, exec, save_credentials, save_key
 
 
 def _done(stdout="", returncode=0, stderr=""):
@@ -85,6 +85,28 @@ class TestTenants(unittest.TestCase):
             save_key("stripe", "alice", "sk_test_123")
         self.assertNotIn("sk_test_123", run.call_args.args[0])
         self.assertEqual(run.call_args.kwargs["input"], b"sk_test_123\n")
+
+    def test_save_credentials_uses_one_json_line_on_stdin(self, *_):
+        out = json.dumps({"provider_slug": "coinswitch", "tenant_id": "alice", "auth_type": "request_signature", "stored": "local"})
+        with mock.patch("subprocess.run", return_value=_done(out)) as run:
+            save_credentials("coinswitch", "alice", {"api_key": " pub ", "secret_key": "sec"})
+        self.assertEqual(run.call_args.args[0][1:], ["auth", "connect", "coinswitch", "--tenant", "alice", "--json"])
+        self.assertEqual(run.call_args.kwargs["input"], b'{"api_key":"pub","secret_key":"sec"}\n')
+        self.assertNotIn("sec", " ".join(run.call_args.args[0]))
+
+    def test_save_credentials_on_unsigned_provider_raises(self, *_):
+        out = json.dumps({"provider_slug": "stripe", "auth_type": "api_key", "stored": "local"})
+        with mock.patch("subprocess.run", return_value=_done(out)):
+            with self.assertRaisesRegex(SwytchcodeError, "does not use signed requests"):
+                save_credentials("stripe", "alice", {"api_key": "k"})
+
+    def test_save_credentials_validates_before_running(self, *_):
+        with mock.patch("subprocess.run") as run:
+            with self.assertRaises(SwytchcodeError):
+                save_credentials("x", "alice", {})
+            with self.assertRaises(SwytchcodeError):
+                save_credentials("x", "alice", {"a": 1})
+        run.assert_not_called()
 
     def test_disconnect_has_no_json_flag(self, *_):
         with mock.patch("subprocess.run", return_value=_done("Disconnected")) as run:

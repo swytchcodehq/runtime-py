@@ -110,16 +110,18 @@ except SwytchcodeError as e:
 When your app's own users each connect their accounts, pass your id for the logged-in user (from your server's session, never from the browser) on every call made for them:
 
 ```python
-from swytchcode_runtime import connect, save_key, disconnect, exec, Swytchcode
+from swytchcode_runtime import connect, save_key, save_credentials, disconnect, exec, Swytchcode
 
 url = connect("gmail", user.id)["url"]                  # one-time link (OAuth), open it from the user's click
 save_key("stripe", user.id, key)                        # API-key providers: stored on your server only
+save_credentials("coinswitch", user.id,                 # signed requests (crypto exchanges): every field
+                 {"api_key": api_key, "secret_key": secret_key})  # the exchange needs, stored on your server only
 exec("gmail.user.profile.get", {"params": {"userId": "me"}}, tenant_id=user.id)
 client = Swytchcode(provider, tenant_id=user.id)        # agents: every tool runs for this user
 disconnect("gmail", user.id)
 ```
 
-An end user who has not connected raises `SwytchcodeError` with `details["category"] == "tenant_not_connected"`. Guide: https://docs.swytchcode.com/guides/multi-tenant/
+An end user who has not connected raises `SwytchcodeError` with `details["category"] == "tenant_not_connected"`. For exchanges that sign every request, `save_credentials()` takes the fields the provider's signing recipe names (for example `api_key`, `secret_key` and `passphrase`); the CLI signs each of that user's requests with them. Guide: https://docs.swytchcode.com/guides/multi-tenant/
 
 ## What this library is
 
