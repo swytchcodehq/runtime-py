@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from typing import Any
 
@@ -277,14 +278,15 @@ class Swytchcode:
                 # Isolate failures per block so one failing tool doesn't drop the
                 # results for the other tool_use blocks in the same turn.
                 try:
-                    content = str(
-                        self.tools.execute(
-                            cid,
-                            getattr(block, "input", {}),
-                            _raw_inputs=raw_inputs,
-                            timeout=timeout,
-                        )
+                    result = self.tools.execute(
+                        cid,
+                        getattr(block, "input", {}),
+                        _raw_inputs=raw_inputs,
+                        timeout=timeout,
                     )
+                    # Send JSON, not Python's repr ({'paid': True, 'x': None}),
+                    # matching JSON.stringify in the JS runtime.
+                    content = result if isinstance(result, str) else json.dumps(result)
                     is_error = False
                 except Exception as e:  # noqa: BLE001
                     content = f"Error executing {cid}: {e}"
