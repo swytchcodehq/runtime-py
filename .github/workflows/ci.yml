@@ -20,5 +20,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
-      - run: pip install -e . pytest pytest-cov
-      - run: pytest tests/ -v --cov=swytchcode_runtime --cov-report=term-missing || echo "No tests found, skipping"
+      # pydantic is optional at runtime (LangGraph/CrewAI providers) but the schema tests need it.
+      - run: pip install -e . pytest pytest-cov pydantic
+      - run: pytest tests/ -v --cov=swytchcode_runtime --cov-report=term-missing
